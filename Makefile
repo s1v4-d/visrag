@@ -32,6 +32,7 @@ start-docker: .env
 
 stop-docker:
 	docker compose --env-file .env -f dev-env/docker-compose.yaml -p $(PROJECT_NAME) down
+	docker system prune -a -f --volumes
 
 logs:
 	docker compose --env-file .env -f dev-env/docker-compose.yaml -p $(PROJECT_NAME) logs -f api

@@ -3,36 +3,45 @@ FROM python:${PYTHON_VERSION}-slim
 
 ENV PYTHONUNBUFFERED=1 \
     PIP_NO_CACHE_DIR=1 \
-    UV_LINK_MODE=copy \
-    UV_PROJECT_ENVIRONMENT=/opt/venv \
-    PATH=/root/.local/bin:/opt/venv/bin:$PATH
+    PATH=/opt/venv/bin:$PATH
 
 WORKDIR /app
 
+# Install minimal runtime dependencies + pip/uv
 RUN apt-get update -y \
-    && DEBIAN_FRONTEND=noninteractive apt-get install -y \
-       build-essential git curl libglib2.0-0 libgl1 \
+    && DEBIAN_FRONTEND=noninteractive apt-get install -y --no-install-recommends \
+       libglib2.0-0 libgl1 curl \
     && apt-get clean \
-    && rm -rf /var/lib/apt/lists/*
+    && rm -rf /var/lib/apt/lists/* \
+    && pip install --no-cache-dir uv
 
-# Install uv (fast Python package manager)
-RUN curl -LsSf https://astral.sh/uv/install.sh | sh
+# Copy only metadata for dependency installation
+COPY pyproject.toml uv.lock /app/
 
-# Copy project metadata and lockfile first (cache layer)
-COPY pyproject.toml /app/pyproject.toml
-COPY uv.lock /app/uv.lock
-
-# Create project venv outside bind mount and install dependencies from lock
-RUN mkdir -p /opt/venv \
-    && cd /app \
-    && uv sync --frozen --extra dev
+# Create venv directory (dependencies will be installed on first run via volume mount)
+RUN python -m venv /opt/venv
 
 # Copy app source
 COPY src/ /app/src/
 COPY api/ /app/api/
 COPY application.py /app/application.py
 
+# Install dependencies at container startup (via entrypoint)
+COPY <<'EOF' /entrypoint.sh
+#!/bin/sh
+set -e
+if [ ! -f /opt/venv/.installed ]; then
+  echo "Installing dependencies on first run with uv sync..."
+  uv sync --frozen --extra dev
+  touch /opt/venv/.installed
+fi
+exec "$@"
+EOF
+
+RUN chmod +x /entrypoint.sh
+
 EXPOSE 8080
 HEALTHCHECK CMD curl --fail http://localhost:8080/api/health || exit 1
 
+ENTRYPOINT ["/entrypoint.sh"]
 CMD ["uvicorn", "application:get_app", "--factory", "--host", "0.0.0.0", "--port", "8080", "--reload"]

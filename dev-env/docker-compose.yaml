@@ -17,6 +17,7 @@ services:
       - PYTHONUNBUFFERED=1
     volumes:
       - ../:/app
+      - venv_data:/opt/venv  # Persist venv across restarts
     depends_on:
       - qdrant
     ports:
@@ -33,4 +34,6 @@ services:
 
 volumes:
   qdrant_storage:
+    driver: local
+  venv_data:
     driver: local
