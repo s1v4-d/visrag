@@ -1,0 +1,36 @@
+version: "3.9"
+
+services:
+  api:
+    build:
+      context: ..
+      dockerfile: dev-env/Dockerfile
+      args:
+        - PYTHON_VERSION=3.12
+        - COMMIT_SHA=${COMMIT_SHA}
+        - BUILD_TIMESTAMP=${BUILD_TIMESTAMP}
+    container_name: ${PROJECT_NAME}-api
+    environment:
+      - OPENAI_API_KEY=${OPENAI_API_KEY}
+      - QDRANT_URL=${QDRANT_URL}
+      - SERVICE_PORT=${SERVICE_PORT}
+      - PYTHONUNBUFFERED=1
+    volumes:
+      - ../:/app
+    depends_on:
+      - qdrant
+    ports:
+      - "${SERVICE_PORT}:8080"
+
+  qdrant:
+    image: qdrant/qdrant:latest
+    restart: unless-stopped
+    ports:
+      - "6333:6333"
+      - "6334:6334"
+    volumes:
+      - qdrant_storage:/qdrant/storage
+
+volumes:
+  qdrant_storage:
+    driver: local
